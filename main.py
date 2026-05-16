@@ -21,9 +21,9 @@ def run_web_server():
 
 # --- BOT CONFIGURATION ---
 TOKEN = os.environ.get('DISCORD_TOKEN')
-ALERT_CHANNEL_ID = 1505124887189000214  # Channel for your daily TikTok reminders
-STRIKE_CHANNEL_ID = 1505179437585666169  # Your verified text strike channel ID
-GUILD_ID = 1505104807382220870         # Your exact Discord Server ID
+ALERT_CHANNEL_ID = 1505124887189000214  
+STRIKE_CHANNEL_ID = 1505179437585666169  
+GUILD_ID = 1505104807382220870         
 
 # Your permanent database of TikTok links
 TIKTOK_BANK = [
@@ -48,7 +48,7 @@ SCHEDULE = [
     ('weekend', "22:00", "# @everyone FINAL REMINDER")
 ]
 
-# --- ADVANCED FORCED SYNC ENGINE構造 ---
+# --- ADVANCED FORCED SYNC ENGINE ---
 class LeedsBotClient(commands.Bot):
     def __init__(self):
         intents = discord.Intents.default()
@@ -104,6 +104,9 @@ def get_strike_message(member: discord.Member, number: int) -> str:
 
 @bot.tree.command(name="schedule", description="Displays the automated messaging timetable.")
 async def show_schedule(interaction: discord.Interaction):
+    # Defer instantly to secure connection window
+    await interaction.response.defer(ephemeral=True)
+    
     schedule_text = (
         "📅 **Automated Alert Timetable (UK Time)** 📅\n\n"
         "**Weekdays (Monday - Friday):**\n"
@@ -121,21 +124,23 @@ async def show_schedule(interaction: discord.Interaction):
         "• 20:00 ➔ # REMINDER\n"
         "• 22:00 ➔ # FINAL REMINDER"
     )
-    await interaction.response.send_message(schedule_text, ephemeral=True)
+    await interaction.followup.send(schedule_text, ephemeral=True)
 
 @bot.tree.command(name="addvideo", description="Queues a specific TikTok video URL for the very next morning alert.")
 @app_commands.describe(url="The full TikTok link to send tomorrow morning")
 async def add_morning_video(interaction: discord.Interaction, url: str):
+    await interaction.response.defer(ephemeral=True)
+    
     if not is_authorized_staff(interaction.user):
-        await interaction.response.send_message("❌ Access Denied: Only Founders, Co-Founders, and Admins can add custom morning videos.", ephemeral=True)
+        await interaction.followup.send("❌ Access Denied: Only Founders, Co-Founders, and Admins can add custom morning videos.", ephemeral=True)
         return
 
     global queued_morning_video
     if "tiktok.com" not in url.lower():
-        await interaction.response.send_message("❌ Error: Please provide a valid TikTok URL link.", ephemeral=True)
+        await interaction.followup.send("❌ Error: Please provide a valid TikTok URL link.", ephemeral=True)
         return
     queued_morning_video = url
-    await interaction.response.send_message(f"✅ Success! The next morning alert will feature this video link: {url}")
+    await interaction.followup.send(f"✅ Success! The next morning alert will feature this video link: {url}", ephemeral=True)
 
 @bot.tree.command(name="strike", description="Issue a REAL strike to a member (1-5) and apply punishment inside the strike channel.")
 @app_commands.describe(member="The user to strike", number="The strike level (1 to 5)")
@@ -147,21 +152,24 @@ async def add_morning_video(interaction: discord.Interaction, url: str):
     app_commands.Choice(name="Strike 5: Permanent Ban", value=5)
 ])
 async def issue_strike(interaction: discord.Interaction, member: discord.Member, number: int):
+    # Set to ephemeral=True so staff execution messages remain private to them
+    await interaction.response.defer(ephemeral=True)
+
     if not is_authorized_staff(interaction.user):
-        await interaction.response.send_message("❌ Access Denied: You must be a Founder, Co-Founder, or Admin to execute strikes.", ephemeral=True)
+        await interaction.followup.send("❌ Access Denied: You must be a Founder, Co-Founder, or Admin to execute strikes.", ephemeral=True)
         return
 
     if is_high_rank(member) and interaction.guild.owner_id != interaction.user.id:
-        await interaction.response.send_message("❌ Protection Block: Founders and Co-Founders cannot be real-striked by staff. Only the Server Owner can execute this.", ephemeral=True)
+        await interaction.followup.send("❌ Protection Block: Founders and Co-Founders cannot be real-striked by staff. Only the Server Owner can execute this.", ephemeral=True)
         return
 
     if interaction.user.top_role <= member.top_role and interaction.guild.owner_id != interaction.user.id:
-        await interaction.response.send_message("❌ Hierarchy Block: You cannot issue a strike to someone with a higher or equal role ranking.", ephemeral=True)
+        await interaction.followup.send("❌ Hierarchy Block: You cannot issue a strike to someone with a higher or equal role ranking.", ephemeral=True)
         return
 
     strike_channel = bot.get_channel(STRIKE_CHANNEL_ID)
     if not strike_channel:
-        await interaction.response.send_message("❌ Configuration Error: Could not locate the dedicated strike log channel.", ephemeral=True)
+        await interaction.followup.send("❌ Configuration Error: Could not locate the dedicated strike log channel.", ephemeral=True)
         return
 
     msg = get_strike_message(member, number)
@@ -182,12 +190,12 @@ async def issue_strike(interaction: discord.Interaction, member: discord.Member,
             await member.ban(reason="Strike 5: Accumulation Limit Reached", delete_message_days=1)
             await strike_channel.send(msg)
 
-        await interaction.response.send_message(f"✅ Real Strike {number} processed seamlessly in {strike_channel.mention}.", ephemeral=True)
+        await interaction.followup.send(f"✅ Real Strike {number} processed seamlessly in {strike_channel.mention}.", ephemeral=True)
 
     except discord.Forbidden:
-        await interaction.response.send_message("❌ Bot Permission Failure: Ensure the bot role is dragged above the target user in Server Settings.", ephemeral=True)
+        await interaction.followup.send("❌ Bot Permission Failure: Ensure the bot role is dragged above the target user in Server Settings.", ephemeral=True)
     except Exception as e:
-        await interaction.response.send_message(f"❌ Execution Failure: {e}", ephemeral=True)
+        await interaction.followup.send(f"❌ Execution Failure: {e}", ephemeral=True)
 
 @bot.tree.command(name="teststrike", description="Simulate a fake strike warning message that drops in channel but does not punish.")
 @app_commands.describe(member="The user to simulate onto", number="The strike level to fake (1 to 5)")
@@ -199,20 +207,22 @@ async def issue_strike(interaction: discord.Interaction, member: discord.Member,
     app_commands.Choice(name="Fake Strike 5: Permanent Ban", value=5)
 ])
 async def test_strike(interaction: discord.Interaction, member: discord.Member, number: int):
+    await interaction.response.defer(ephemeral=True)
+
     if not is_authorized_staff(interaction.user):
-        await interaction.response.send_message("❌ Access Denied: You must be a Founder, Co-Founder, or Admin to execute simulation scripts.", ephemeral=True)
+        await interaction.followup.send("❌ Access Denied: You must be a Founder, Co-Founder, or Admin to execute simulation scripts.", ephemeral=True)
         return
 
     strike_channel = bot.get_channel(STRIKE_CHANNEL_ID)
     if not strike_channel:
-        await interaction.response.send_message("❌ Configuration Error: Could not locate the dedicated strike log channel.", ephemeral=True)
+        await interaction.followup.send("❌ Configuration Error: Could not locate the dedicated strike log channel.", ephemeral=True)
         return
 
     base_msg = get_strike_message(member, number)
     fake_msg = f"{base_msg} (TEST BY {interaction.user.mention})"
     
     await strike_channel.send(fake_msg)
-    await interaction.response.send_message(f"👻 Simulation Verified: Fake Test Strike {number} dropped safely in {strike_channel.mention}.", ephemeral=True)
+    await interaction.followup.send(f"👻 Simulation Verified: Fake Test Strike {number} dropped safely in {strike_channel.mention}.", ephemeral=True)
 
 # --- SCHEDULER ENGINE ---
 
@@ -246,6 +256,5 @@ async def scheduler_loop():
 # Run web routing and discord gateway concurrently
 threading.Thread(target=run_web_server).start()
 bot.run(TOKEN)
-
 
 
