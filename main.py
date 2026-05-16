@@ -21,7 +21,8 @@ def run_web_server():
 
 # --- BOT CONFIGURATION ---
 TOKEN = os.environ.get('DISCORD_TOKEN')
-CHANNEL_ID = 1505124887189000214  # Your verified text channel ID
+ALERT_CHANNEL_ID = 1505124887189000214  
+STRIKE_CHANNEL_ID = 1505179437585666169  
 
 # Your permanent database of TikTok links
 TIKTOK_BANK = [
@@ -29,10 +30,8 @@ TIKTOK_BANK = [
     "https://tiktok.com"
 ]
 
-# Global variable to store the manually queued morning video
 queued_morning_video = None
 
-# Automated Schedule Table
 SCHEDULE = [
     ('weekday', "08:00", "# @everyone ACTIVITY CHECK"),
     ('weekday', "16:00", "# @everyone REMINDER"),
@@ -49,15 +48,12 @@ SCHEDULE = [
 ]
 
 intents = discord.Intents.default()
-# Note: Message Content Intent is no longer strictly required for pure slash commands, 
-# but keeping your portal switch enabled is highly recommended.
+intents.members = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 @bot.event
 async def on_ready():
     print(f"Logged in as {bot.user.name}")
-    
-    # Register slash commands globally across all servers the bot is in
     try:
         synced = await bot.tree.sync()
         print(f"Successfully synced {len(synced)} slash command(s).")
@@ -66,6 +62,39 @@ async def on_ready():
         
     if not scheduler_loop.is_running():
         scheduler_loop.start()
+
+# --- HELPER LOGIC FOR STAFF CHECKING ---
+def is_authorized_staff(member: discord.Member) -> bool:
+    """Checks if a user is a Founder, Co-Founder, Admin, or the Server Owner."""
+    if member.guild.owner_id == member.id:
+        return True
+    
+    staff_roles = {"founder", "co-founder", "admin"}
+    for role in member.roles:
+        if role.name.lower() in staff_roles:
+            return True
+    return False
+
+def is_high_rank(member: discord.Member) -> bool:
+    """Checks if a target user is a Founder or Co-Founder."""
+    high_roles = {"founder", "co-founder"}
+    for role in member.roles:
+        if role.name.lower() in high_roles:
+            return True
+    return False
+
+def get_strike_message(member: discord.Member, number: int) -> str:
+    if number == 1:
+        return f"{member.mention} THATS STRIKE ONE REMEMBER 5 IS BAN"
+    elif number == 2:
+        return f"{member.mention} BREAKING RULES 2ND STRIKE TIMEOUT FOR 30MINS"
+    elif number == 3:
+        return f"{member.mention} BREAKING RULES 3RD STRIKE TIMEOUT FOR 1HOUR AND 30 MINS"
+    elif number == 4:
+        return f"{member.mention} BREAKING RULES 4TH STRIKE TIMEOUT FOR 3DAYS"
+    elif number == 5:
+        return f"{member.mention} YOU BROKE THE RULES TO MANY TIMES YOU ARE BANNED"
+    return ""
 
 # --- SLASH COMMANDS ---
 
@@ -88,20 +117,99 @@ async def show_schedule(interaction: discord.Interaction):
         "• 20:00 ➔ # REMINDER\n"
         "• 22:00 ➔ # FINAL REMINDER"
     )
-    # ephemeral=True means only the user running the command sees this response
     await interaction.response.send_message(schedule_text, ephemeral=True)
 
 @bot.tree.command(name="addvideo", description="Queues a specific TikTok video URL for the very next morning alert.")
 @app_commands.describe(url="The full TikTok link to send tomorrow morning")
 async def add_morning_video(interaction: discord.Interaction, url: str):
+    if not is_authorized_staff(interaction.user):
+        await interaction.response.send_message("❌ Access Denied: Only Founders, Co-Founders, and Admins can add custom morning videos.", ephemeral=True)
+        return
+
     global queued_morning_video
-    
     if "tiktok.com" not in url.lower():
         await interaction.response.send_message("❌ Error: Please provide a valid TikTok URL link.", ephemeral=True)
         return
-        
     queued_morning_video = url
     await interaction.response.send_message(f"✅ Success! The next morning alert will feature this video link: {url}")
+
+@bot.tree.command(name="strike", description="Issue a REAL strike to a member (1-5) and apply punishment inside the strike channel.")
+@app_commands.describe(member="The user to strike", number="The strike level (1 to 5)")
+@app_commands.choices(number=[
+    app_commands.Choice(name="Strike 1: Warning", value=1),
+    app_commands.Choice(name="Strike 2: 30 Min Timeout", value=2),
+    app_commands.Choice(name="Strike 3: 1.5 Hour Timeout", value=3),
+    app_commands.Choice(name="Strike 4: 3 Day Timeout", value=4),
+    app_commands.Choice(name="Strike 5: Permanent Ban", value=5)
+])
+async def issue_strike(interaction: discord.Interaction, member: discord.Member, number: int):
+    if not is_authorized_staff(interaction.user):
+        await interaction.response.send_message("❌ Access Denied: You must be a Founder, Co-Founder, or Admin to execute strikes.", ephemeral=True)
+        return
+
+    if is_high_rank(member) and interaction.guild.owner_id != interaction.user.id:
+        await interaction.response.send_message("❌ Protection Block: Founders and Co-Founders cannot be real-striked by staff. Only the Server Owner can execute this.", ephemeral=True)
+        return
+
+    if interaction.user.top_role <= member.top_role and interaction.guild.owner_id != interaction.user.id:
+        await interaction.response.send_message("❌ Hierarchy Block: You cannot issue a strike to someone with a higher or equal role ranking.", ephemeral=True)
+        return
+
+    strike_channel = bot.get_channel(STRIKE_CHANNEL_ID)
+    if not strike_channel:
+        await interaction.response.send_message("❌ Configuration Error: Could not locate the dedicated strike log channel.", ephemeral=True)
+        return
+
+    msg = get_strike_message(member, number)
+
+    try:
+        if number == 1:
+            await strike_channel.send(msg)
+        elif number == 2:
+            await member.timeout(datetime.timedelta(minutes=30), reason="Strike 2")
+            await strike_channel.send(msg)
+        elif number == 3:
+            await member.timeout(datetime.timedelta(hours=1, minutes=30), reason="Strike 3")
+            await strike_channel.send(msg)
+        elif number == 4:
+            await member.timeout(datetime.timedelta(days=3), reason="Strike 4")
+            await strike_channel.send(msg)
+        elif number == 5:
+            await member.ban(reason="Strike 5: Accumulation Limit Reached", delete_message_days=1)
+            await strike_channel.send(msg)
+
+        await interaction.response.send_message(f"✅ Real Strike {number} processed seamlessly in {strike_channel.mention}.", ephemeral=True)
+
+    except discord.Forbidden:
+        await interaction.response.send_message("❌ Bot Permission Failure: Ensure the bot role is dragged above the target user in Server Settings.", ephemeral=True)
+    except Exception as e:
+        await interaction.response.send_message(f"❌ Execution Failure: {e}", ephemeral=True)
+
+@bot.tree.command(name="teststrike", description="Simulate a fake strike warning message that drops in channel but does not punish.")
+@app_commands.describe(member="The user to simulate onto", number="The strike level to fake (1 to 5)")
+@app_commands.choices(number=[
+    app_commands.Choice(name="Fake Strike 1: Warning", value=1),
+    app_commands.Choice(name="Fake Strike 2: 30 Min Timeout", value=2),
+    app_commands.Choice(name="Fake Strike 3: 1.5 Hour Timeout", value=3),
+    app_commands.Choice(name="Fake Strike 4: 3 Day Timeout", value=4),
+    app_commands.Choice(name="Fake Strike 5: Permanent Ban", value=5)
+])
+async def test_strike(interaction: discord.Interaction, member: discord.Member, number: int):
+    if not is_authorized_staff(interaction.user):
+        await interaction.response.send_message("❌ Access Denied: You must be a Founder, Co-Founder, or Admin to execute simulation scripts.", ephemeral=True)
+        return
+
+    strike_channel = bot.get_channel(STRIKE_CHANNEL_ID)
+    if not strike_channel:
+        await interaction.response.send_message("❌ Configuration Error: Could not locate the dedicated strike log channel.", ephemeral=True)
+        return
+
+    # Appends who ran the fake command at the end of the text string
+    base_msg = get_strike_message(member, number)
+    fake_msg = f"{base_msg} (TEST BY {interaction.user.mention})"
+    
+    await strike_channel.send(fake_msg)
+    await interaction.response.send_message(f"👻 Simulation Verified: Fake Test Strike {number} dropped safely in {strike_channel.mention}.", ephemeral=True)
 
 # --- SCHEDULER ENGINE ---
 
@@ -119,17 +227,14 @@ async def scheduler_loop():
     
     for alert_type, alert_time, alert_msg in SCHEDULE:
         if alert_type == day_type and alert_time == current_time:
-            channel = bot.get_channel(CHANNEL_ID)
+            channel = bot.get_channel(ALERT_CHANNEL_ID)
             if channel:
-                # Check if it's the first morning alert of the day
                 is_morning = (alert_time == "08:00" and day_type == 'weekday') or (alert_time == "10:00" and day_type == 'weekend')
                 
                 if is_morning and queued_morning_video is not None:
-                    # Use the custom added video link, then erase it from memory
                     selected_video = queued_morning_video
                     queued_morning_video = None
                 else:
-                    # Pull from the default bank of URLs
                     selected_video = random.choice(TIKTOK_BANK)
                 
                 await channel.send(f"{alert_msg}\n{selected_video}")
