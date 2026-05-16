@@ -6,28 +6,29 @@ import random
 from flask import Flask
 import threading
 
-# --- WEB SERVER FOR RENDER/UPTIMEROBOT ---
+# --- WEB SERVER ENGINE FOR RENDER & UPTIMEROBOT ---
 app = Flask('')
 
 @app.route('/')
 def home():
-    return "Bot is online and running!"
+    return "Leeds Assistant Bot is fully operational!"
 
 def run_web_server():
-    # Render automatically passes a PORT environment variable
     import os
     port = int(os.environ.get("PORT", 8080))
     app.run(host='0.0.0.0', port=port)
 
-# --- CONFIGURATION ---
-TOKEN = 'YOUR_BOT_TOKEN_HERE'  # Make sure your actual Discord token is here!
-CHANNEL_ID = 123456789012345678  # Make sure your actual channel ID is here!
+# --- BOT CONFIGURATION ---
+TOKEN = 'MTUwNTE5NzU2NTUxMDAyNTI3Nw.GTIZUQ.AL9NloAhKab8wI4Pd-4K4A3jzij9wakAYFm3sU'
+CHANNEL_ID = 1505124887189000214  # Your verified text channel ID
 
+# Your database of TikTok links (Add your real video links here)
 TIKTOK_BANK = [
     "https://tiktok.com",
     "https://tiktok.com"
 ]
 
+# Automated Schedule Table
 SCHEDULE = [
     ('weekday', "08:00", "# @everyone ACTIVITY CHECK"),
     ('weekday', "16:00", "# @everyone REMINDER"),
@@ -56,6 +57,7 @@ async def on_ready():
 async def scheduler_loop():
     await bot.wait_until_ready()
     
+    # Synced exactly with UK Local Time zone (Europe/London)
     tz = pytz.timezone('Europe/London')
     now = datetime.datetime.now(tz)
     
@@ -71,6 +73,6 @@ async def scheduler_loop():
                 await channel.send(f"{alert_msg}\n{random_video}")
                 break
 
-# Start the web server in a background thread before running the bot
+# Run web routing and discord gateway on concurrent threads
 threading.Thread(target=run_web_server).start()
 bot.run(TOKEN)
