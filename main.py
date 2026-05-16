@@ -21,8 +21,9 @@ def run_web_server():
 
 # --- BOT CONFIGURATION ---
 TOKEN = os.environ.get('DISCORD_TOKEN')
-ALERT_CHANNEL_ID = 1505124887189000214  
-STRIKE_CHANNEL_ID = 1505179437585666169  
+ALERT_CHANNEL_ID = 1505124887189000214  # Channel for your daily TikTok reminders
+STRIKE_CHANNEL_ID = 1505179437585666169  # Your verified text strike channel ID
+GUILD_ID = 1505104807382220870         # Your exact Discord Server ID
 
 # Your permanent database of TikTok links
 TIKTOK_BANK = [
@@ -46,37 +47,33 @@ SCHEDULE = [
     ('weekend', "20:00", "# @everyone REMINDER"),
     ('weekend', "22:00", "# @everyone FINAL REMINDER")
 ]
+
+# --- ADVANCED FORCED SYNC ENGINE構造 ---
+class LeedsBotClient(commands.Bot):
+    def __init__(self):
+        intents = discord.Intents.default()
+        intents.members = True
+        super().__init__(command_prefix="!", intents=intents)
+
+    async def setup_hook(self):
+        """Forces an instant server sync before the bot fully connects."""
+        guild_target = discord.Object(id=GUILD_ID)
+        self.tree.copy_global_to(guild=guild_target)
+        synced_list = await self.tree.sync(guild=guild_target)
+        print(f"Successfully synced {len(synced_list)} slash command(s) instantly to the server.")
+
+bot = LeedsBotClient()
+
 @bot.event
 async def on_ready():
     print(f"Logged in as {bot.user.name}")
-    try:
-        # This copies your commands directly to your specific server so they show up instantly!
-        guild = discord.Object(id=1505104807382220870) # Your Server ID from your links
-        bot.tree.copy_global_to(guild=guild)
-        synced = await bot.tree.sync(guild=guild)
-        print(f"Successfully synced {len(synced)} slash command(s) instantly to the server.")
-    except Exception as e:
-        print(f"Failed to sync slash commands: {e}")
-        
-    if not scheduler_loop.is_running():
-        scheduler_loop.start()
-
-    print(f"Logged in as {bot.user.name}")
-    try:
-        synced = await bot.tree.sync()
-        print(f"Successfully synced {len(synced)} slash command(s).")
-    except Exception as e:
-        print(f"Failed to sync slash commands: {e}")
-        
     if not scheduler_loop.is_running():
         scheduler_loop.start()
 
 # --- HELPER LOGIC FOR STAFF CHECKING ---
 def is_authorized_staff(member: discord.Member) -> bool:
-    """Checks if a user is a Founder, Co-Founder, Admin, or the Server Owner."""
     if member.guild.owner_id == member.id:
         return True
-    
     staff_roles = {"founder", "co-founder", "admin"}
     for role in member.roles:
         if role.name.lower() in staff_roles:
@@ -84,7 +81,6 @@ def is_authorized_staff(member: discord.Member) -> bool:
     return False
 
 def is_high_rank(member: discord.Member) -> bool:
-    """Checks if a target user is a Founder or Co-Founder."""
     high_roles = {"founder", "co-founder"}
     for role in member.roles:
         if role.name.lower() in high_roles:
@@ -212,7 +208,6 @@ async def test_strike(interaction: discord.Interaction, member: discord.Member, 
         await interaction.response.send_message("❌ Configuration Error: Could not locate the dedicated strike log channel.", ephemeral=True)
         return
 
-    # Appends who ran the fake command at the end of the text string
     base_msg = get_strike_message(member, number)
     fake_msg = f"{base_msg} (TEST BY {interaction.user.mention})"
     
@@ -248,8 +243,9 @@ async def scheduler_loop():
                 await channel.send(f"{alert_msg}\n{selected_video}")
                 break
 
-# Run web routing and discord gateway on concurrent threads
+# Run web routing and discord gateway concurrently
 threading.Thread(target=run_web_server).start()
 bot.run(TOKEN)
+
 
 
