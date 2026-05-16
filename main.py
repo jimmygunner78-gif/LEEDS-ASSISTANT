@@ -3,12 +3,26 @@ from discord.ext import tasks, commands
 import datetime
 import pytz
 import random
+from flask import Flask
+import threading
+
+# --- WEB SERVER FOR RENDER/UPTIMEROBOT ---
+app = Flask('')
+
+@app.route('/')
+def home():
+    return "Bot is online and running!"
+
+def run_web_server():
+    # Render automatically passes a PORT environment variable
+    import os
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host='0.0.0.0', port=port)
 
 # --- CONFIGURATION ---
-TOKEN = 'YOUR_BOT_TOKEN_HERE'  # Put your Discord Dev Portal Token here
-CHANNEL_ID = 123456789012345678  # Put your Discord channel ID here
+TOKEN = 'YOUR_BOT_TOKEN_HERE'  # Make sure your actual Discord token is here!
+CHANNEL_ID = 123456789012345678  # Make sure your actual channel ID is here!
 
-# Your bank of TikTok links
 TIKTOK_BANK = [
     "https://tiktok.com",
     "https://tiktok.com"
@@ -35,13 +49,13 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 @bot.event
 async def on_ready():
     print(f"Logged in as {bot.user.name}")
-    scheduler_loop.start()
+    if not scheduler_loop.is_running():
+        scheduler_loop.start()
 
 @tasks.loop(minutes=1)
 async def scheduler_loop():
     await bot.wait_until_ready()
     
-    # Matches your local UK system clock timezone
     tz = pytz.timezone('Europe/London')
     now = datetime.datetime.now(tz)
     
@@ -57,4 +71,6 @@ async def scheduler_loop():
                 await channel.send(f"{alert_msg}\n{random_video}")
                 break
 
+# Start the web server in a background thread before running the bot
+threading.Thread(target=run_web_server).start()
 bot.run(TOKEN)
