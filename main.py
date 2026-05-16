@@ -51,7 +51,6 @@ SCHEDULE = [
 # --- INSTANT SYNC ENGINE ---
 class LeedsBotClient(commands.Bot):
     def __init__(self):
-        # Requests full intent profile matching your developer portal switches
         intents = discord.Intents.all()
         super().__init__(command_prefix="!", intents=intents)
 
@@ -74,14 +73,19 @@ async def on_ready():
 def is_authorized_staff(member: discord.Member) -> bool:
     if member.guild.owner_id == member.id:
         return True
-    staff_roles = {"founder", "co-founder", "admin"}
+    
+    # Matches your exact spelling configurations
+    staff_roles = {"founder", "co founder", "admin"}
     for role in member.roles:
         if role.name.lower() in staff_roles:
             return True
     return False
 
 def is_high_rank(member: discord.Member) -> bool:
-    high_roles = {"founder", "co-founder"}
+    if member.guild.owner_id == member.id:
+        return True
+    
+    high_roles = {"founder", "co founder"}
     for role in member.roles:
         if role.name.lower() in high_roles:
             return True
@@ -104,7 +108,6 @@ def get_strike_message(member: discord.Member, number: int) -> str:
 
 @bot.tree.command(name="schedule", description="Displays the automated messaging timetable.")
 async def show_schedule(interaction: discord.Interaction):
-    # Instant visual feedback to keep Discord happy
     await interaction.response.send_message("🔄 Retrieving schedule...", ephemeral=True)
     
     schedule_text = (
@@ -132,7 +135,7 @@ async def add_morning_video(interaction: discord.Interaction, url: str):
     await interaction.response.send_message("🔄 Checking permissions...", ephemeral=True)
     
     if not is_authorized_staff(interaction.user):
-        await interaction.edit_original_response(content="❌ Access Denied: Only Founders, Co-Founders, and Admins can add custom morning videos.")
+        await interaction.edit_original_response(content="❌ Access Denied: Only Founders, co founders, and Admins can add custom morning videos.")
         return
 
     global queued_morning_video
@@ -152,15 +155,14 @@ async def add_morning_video(interaction: discord.Interaction, url: str):
     app_commands.Choice(name="Strike 5: Permanent Ban", value=5)
 ])
 async def issue_strike(interaction: discord.Interaction, member: discord.Member, number: int):
-    # Responds instantly so the 3-second limit never breaks
     await interaction.response.send_message("🔄 Processing strike deployment safely...", ephemeral=True)
 
     if not is_authorized_staff(interaction.user):
-        await interaction.edit_original_response(content="❌ Access Denied: You must be a Founder, Co-Founder, or Admin to execute strikes.")
+        await interaction.edit_original_response(content="❌ Access Denied: You must be a Founder, co founder, or Admin to execute strikes.")
         return
 
     if is_high_rank(member) and interaction.guild.owner_id != interaction.user.id:
-        await interaction.edit_original_response(content="❌ Protection Block: Founders and Co-Founders cannot be real-striked by staff. Only the Server Owner can execute this.")
+        await interaction.edit_original_response(content="❌ Protection Block: Founders and co founders cannot be real-striked by staff. Only the Server Owner can execute this.")
         return
 
     if interaction.user.top_role <= member.top_role and interaction.guild.owner_id != interaction.user.id:
@@ -210,7 +212,7 @@ async def test_strike(interaction: discord.Interaction, member: discord.Member, 
     await interaction.response.send_message("🔄 Running test simulation...", ephemeral=True)
 
     if not is_authorized_staff(interaction.user):
-        await interaction.edit_original_response(content="❌ Access Denied: You must be a Founder, Co-Founder, or Admin to execute simulation scripts.")
+        await interaction.edit_original_response(content="❌ Access Denied: You must be a Founder, co founder, or Admin to execute simulation scripts.")
         return
 
     strike_channel = bot.get_channel(STRIKE_CHANNEL_ID)
