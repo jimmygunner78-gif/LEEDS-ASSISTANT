@@ -46,13 +46,21 @@ SCHEDULE = [
     ('weekend', "20:00", "# @everyone REMINDER"),
     ('weekend', "22:00", "# @everyone FINAL REMINDER")
 ]
-
-intents = discord.Intents.default()
-intents.members = True
-bot = commands.Bot(command_prefix="!", intents=intents)
-
 @bot.event
 async def on_ready():
+    print(f"Logged in as {bot.user.name}")
+    try:
+        # This copies your commands directly to your specific server so they show up instantly!
+        guild = discord.Object(id=1505104807382220870) # Your Server ID from your links
+        bot.tree.copy_global_to(guild=guild)
+        synced = await bot.tree.sync(guild=guild)
+        print(f"Successfully synced {len(synced)} slash command(s) instantly to the server.")
+    except Exception as e:
+        print(f"Failed to sync slash commands: {e}")
+        
+    if not scheduler_loop.is_running():
+        scheduler_loop.start()
+
     print(f"Logged in as {bot.user.name}")
     try:
         synced = await bot.tree.sync()
