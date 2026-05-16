@@ -5,6 +5,7 @@ import pytz
 import random
 from flask import Flask
 import threading
+import os
 
 # --- WEB SERVER ENGINE FOR RENDER & UPTIMEROBOT ---
 app = Flask('')
@@ -14,15 +15,15 @@ def home():
     return "Leeds Assistant Bot is fully operational!"
 
 def run_web_server():
-    import os
     port = int(os.environ.get("PORT", 8080))
     app.run(host='0.0.0.0', port=port)
 
 # --- BOT CONFIGURATION ---
-TOKEN = 'MTUwNTE5NzU2NTUxMDAyNTI3Nw.GTIZUQ.AL9NloAhKab8wI4Pd-4K4A3jzij9wakAYFm3sU'
+# Securely pulls your token from Render's private settings
+TOKEN = os.environ.get('DISCORD_TOKEN')
 CHANNEL_ID = 1505124887189000214  # Your verified text channel ID
 
-# Your database of TikTok links (Add your real video links here)
+# Your database of TikTok links
 TIKTOK_BANK = [
     "https://tiktok.com",
     "https://tiktok.com"
@@ -76,3 +77,4 @@ async def scheduler_loop():
 # Run web routing and discord gateway on concurrent threads
 threading.Thread(target=run_web_server).start()
 bot.run(TOKEN)
+
