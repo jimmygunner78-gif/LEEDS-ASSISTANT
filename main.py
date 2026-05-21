@@ -26,6 +26,7 @@ STRIKE_CHANNEL_ID = 1505179437585666169  # Your verified text strike channel ID
 GUILD_ID = 1505104807382220870         # Your exact Discord Server ID
 
 # Your permanent database of TikTok links
+# (Note: You can use standard links here too, the scheduler will clean them up for mobile!)
 TIKTOK_BANK = [
     "https://tiktok.com",
     "https://tiktok.com"
@@ -86,7 +87,7 @@ async def on_ready():
     if not scheduler_loop.is_running():
         scheduler_loop.start()
 
-# --- HELPER LOGIC FOR STAFF CHECKING ---
+# --- HELPER LOGIC FOR STAFF & LINK CLEANING ---
 def is_authorized_staff(member: discord.Member) -> bool:
     if member.guild.owner_id == member.id:
         return True
@@ -104,6 +105,15 @@ def is_high_rank(member: discord.Member) -> bool:
         if role.name.lower() in high_roles:
             return True
     return False
+
+def clean_tiktok_url(url: str) -> str:
+    """Converts standard TikTok URLs to vxtiktok formatting so they render perfectly on phones."""
+    clean_url = url.strip()
+    if "vxtiktok.com" in clean_url:
+        return clean_url
+    if "tiktok.com" in clean_url:
+        return clean_url.replace("tiktok.com", "vxtiktok.com")
+    return clean_url
 
 def get_strike_message(member: discord.Member, number: int) -> str:
     if number == 1:
@@ -133,7 +143,7 @@ async def show_schedule(interaction: discord.Interaction):
         f"• 20:00 ➔ {SCHEDULE_DATA['weekday_20:00']}\n"
         f"• 22:00 ➔ {SCHEDULE_DATA['weekday_22:00']}\n\n"
         "**Weekends (Saturday - Sunday):**\n"
-        "• 10:00 ➔ {SCHEDULE_DATA['weekend_10:00']} (With Video)\n"
+        f"• 10:00 ➔ {SCHEDULE_DATA['weekend_10:00']} (With Video)\n"
         f"• 12:00 ➔ {SCHEDULE_DATA['weekend_12:00']}\n"
         f"• 13:00 ➔ {SCHEDULE_DATA['weekend_13:00']}\n"
         f"• 15:00 ➔ {SCHEDULE_DATA['weekend_15:00']}\n"
@@ -166,7 +176,6 @@ async def edit_scheduled_message(interaction: discord.Interaction, time_slot: st
         await interaction.edit_original_response(content="❌ Access Denied: Only Founders, co founders, and Admins can configure the time schedules.")
         return
 
-    # Dynamically inject the new text string override parameters into storage
     SCHEDULE_DATA[time_slot] = new_text
     clean_slot_title = time_slot.replace("_", " ").title()
     await interaction.edit_original_response(content=f"✅ Timetable Updated! **{clean_slot_title}** has been reprogrammed to send:\n➡️ *{new_text}*")
@@ -180,12 +189,13 @@ async def add_morning_video(interaction: discord.Interaction, url: str):
         await interaction.edit_original_response(content="❌ Access Denied: Only Founders, co founders, and Admins can add custom morning videos.")
         return
 
-    global queued_morning_video
     if "tiktok.com" not in url.lower():
         await interaction.edit_original_response(content="❌ Error: Please provide a valid TikTok URL link.")
         return
-    queued_morning_video = url
-    await interaction.edit_original_response(content=f"✅ Success! The next morning alert will feature this video link: {url}")
+        
+    # Auto-converts standard link to mobile-friendly vxtiktok format instantly
+    queued_morning_video = clean_tiktok_url(url)
+    await interaction.edit_original_response(content=f"✅ Success! The next morning alert will feature this video link (optimized for mobile): {queued_morning_video}")
 
 @bot.tree.command(name="strike", description="Issue a REAL strike to a member (1-5) and apply punishment inside the strike channel.")
 @app_commands.describe(member="The user to strike", number="The strike level (1 to 5)")
@@ -286,9 +296,7 @@ async def scheduler_loop():
         if alert_type == day_type and alert_time == current_time:
             channel = bot.get_channel(ALERT_CHANNEL_ID)
             if channel:
-                # Retrieve the text dynamically based on the current active schedule memory
                 current_active_text = SCHEDULE_DATA[storage_key]
-                
                 is_morning = (alert_time == "08:00" and day_type == 'weekday') or (alert_time == "10:00" and day_type == 'weekend')
                 
                 if is_morning:
@@ -296,7 +304,7 @@ async def scheduler_loop():
                         selected_video = queued_morning_video
                         queued_morning_video = None
                     else:
-                        selected_video = random.choice(TIKTOK_BANK)
+                        selected_video = clean_tiktok_url(random.choice(TIKTOK_BANK))
                     
                     full_message = f"{current_active_text}\n{selected_video}"
                 else:
@@ -308,5 +316,3 @@ async def scheduler_loop():
 # Run web routing and discord gateway concurrently
 threading.Thread(target=run_web_server).start()
 bot.run(TOKEN)
-
-
