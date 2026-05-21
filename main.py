@@ -26,7 +26,6 @@ STRIKE_CHANNEL_ID = 1505179437585666169  # Your verified text strike channel ID
 GUILD_ID = 1505104807382220870         # Your exact Discord Server ID
 
 # Your permanent database of TikTok links
-# (Note: You can use standard links here too, the scheduler will clean them up for mobile!)
 TIKTOK_BANK = [
     "https://tiktok.com",
     "https://tiktok.com"
@@ -107,12 +106,16 @@ def is_high_rank(member: discord.Member) -> bool:
     return False
 
 def clean_tiktok_url(url: str) -> str:
-    """Converts standard TikTok URLs to vxtiktok formatting so they render perfectly on phones."""
+    """Converts standard TikTok URLs to tnktok proxy formatting to fix mobile players and quiet audio issues."""
     clean_url = url.strip()
+    # Strips out any traces of the old broken vxtiktok link
     if "vxtiktok.com" in clean_url:
+        clean_url = clean_url.replace("vxtiktok.com", "tiktok.com")
+        
+    if "tnktok.com" in clean_url:
         return clean_url
     if "tiktok.com" in clean_url:
-        return clean_url.replace("tiktok.com", "vxtiktok.com")
+        return clean_url.replace("tiktok.com", "tnktok.com")
     return clean_url
 
 def get_strike_message(member: discord.Member, number: int) -> str:
@@ -193,9 +196,9 @@ async def add_morning_video(interaction: discord.Interaction, url: str):
         await interaction.edit_original_response(content="❌ Error: Please provide a valid TikTok URL link.")
         return
         
-    # Auto-converts standard link to mobile-friendly vxtiktok format instantly
+    # Auto-converts to the new active proxy format
     queued_morning_video = clean_tiktok_url(url)
-    await interaction.edit_original_response(content=f"✅ Success! The next morning alert will feature this video link (optimized for mobile): {queued_morning_video}")
+    await interaction.edit_original_response(content=f"🔊 Video URL Processed! Audio booster proxy active. Target link: {queued_morning_video}")
 
 @bot.tree.command(name="strike", description="Issue a REAL strike to a member (1-5) and apply punishment inside the strike channel.")
 @app_commands.describe(member="The user to strike", number="The strike level (1 to 5)")
