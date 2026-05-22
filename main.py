@@ -8,7 +8,7 @@ from flask import Flask
 import threading
 import os
 
-# --- ORIGINAL WEB SERVER FOR RENDER ---
+# --- STANDALONE WEB ENGINE ---
 app = Flask('')
 
 @app.route('/')
@@ -16,16 +16,17 @@ def home():
     return "Leeds Assistant Bot is fully operational!"
 
 def run_web_server():
+    # Dynamically pulls Render's assigned network routing port cleanly
     port = int(os.environ.get("PORT", 8080))
     app.run(host='0.0.0.0', port=port)
 
-# --- BOT CONFIGURATION ---
+# --- BOT CONFIGURATION CONFIGS ---
 TOKEN = os.environ.get('DISCORD_TOKEN')
 ALERT_CHANNEL_ID = 1505124887189000214  # Daily reminders channel
 STRIKE_CHANNEL_ID = 1505179437585666169  # Strike log channel
 GUILD_ID = 1505104807382220870         # Server ID
 
-# Your database of TikTok links (Auto-boosted for mobile & PC volume)
+# Your permanent database of TikTok links (Auto-boosted for mobile & PC volume)
 TIKTOK_BANK = [
     "https://tikwm.com",
     "https://tikwm.com"
@@ -33,18 +34,18 @@ TIKTOK_BANK = [
 
 queued_morning_video = None
 
-# --- FOOLPROOF BOT SETUP CLASS ---
+# --- INSTANT SYNC LOGIC ENGINE ---
 class LeedsBot(commands.Bot):
     def __init__(self):
         intents = discord.Intents.all()
         super().__init__(command_prefix="!", intents=intents)
 
     async def setup_hook(self):
-        """Forces an instant command sync before gateway login to prevent timeouts."""
+        """Forces an instant command sync right to your server on boot to prevent gateway lag."""
         guild_target = discord.Object(id=GUILD_ID)
         self.tree.copy_global_to(guild=guild_target)
         await self.tree.sync(guild=guild_target)
-        print("Slash commands hard-synced successfully!")
+        print("Slash commands synced successfully!")
 
 bot = LeedsBot()
 
@@ -94,7 +95,7 @@ def get_strike_message(member: discord.Member, number: int) -> str:
         return f"{member.mention} YOU BROKE THE RULES TO MANY TIMES YOU ARE BANNED"
     return ""
 
-# --- SLASH COMMANDS HANDLERS ---
+# --- APPLICATION COMMAND MAPS ---
 
 @bot.tree.command(name="schedule", description="Displays the automated messaging timetable.")
 async def show_schedule(interaction: discord.Interaction):
@@ -206,7 +207,7 @@ async def test_strike(interaction: discord.Interaction, member: discord.Member, 
     await strike_channel.send(fake_msg)
     await interaction.response.send_message(f"👻 Test Strike dropped in {strike_channel.mention}.", ephemeral=True)
 
-# --- CLOCK ENGINE ---
+# --- TRACKING TIMER TASK ---
 @tasks.loop(minutes=1)
 async def scheduler_loop():
     global queued_morning_video
@@ -238,5 +239,3 @@ async def scheduler_loop():
         if alert_type == day_type and alert_time == current_time:
             channel = bot.get_channel(ALERT_CHANNEL_ID)
             if channel:
-                is_morning = (alert_time == "08:00" and day_type == 'weekday') or (alert_time == "10:00" and day_type == 'weekend')
-
