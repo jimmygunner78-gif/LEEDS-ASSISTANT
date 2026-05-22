@@ -7,6 +7,7 @@ import random
 from flask import Flask
 import asyncio
 import os
+import threading
 
 # --- WEB SERVER CONFIGURATION ---
 app = Flask('')
@@ -14,6 +15,11 @@ app = Flask('')
 @app.route('/')
 def home():
     return "Leeds Assistant Bot is fully operational!"
+
+def run_web_server():
+    # Forces a clean match with Render's required network port routing layers
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host='0.0.0.0', port=port)
 
 # --- BOT CONFIGURATION ---
 TOKEN = os.environ.get('DISCORD_TOKEN')
@@ -68,16 +74,10 @@ class LeedsBotClient(commands.Bot):
         super().__init__(command_prefix="!", intents=intents)
 
     async def setup_hook(self):
-        """Forces an instant server sync and boots up the background web server safely."""
+        """Forces an instant server sync before connecting."""
         guild_target = discord.Object(id=GUILD_ID)
         self.tree.copy_global_to(guild=guild_target)
         await self.tree.sync(guild=guild_target)
-        
-        from werkzeug.serving import make_server
-        port = int(os.environ.get("PORT", 8080))
-        srv = make_server('0.0.0.0', port, app)
-        loop = asyncio.get_running_loop()
-        loop.run_in_executor(None, srv.serve_forever)
 
 bot = LeedsBotClient()
 
@@ -221,3 +221,4 @@ async def issue_strike(interaction: discord.Interaction, member: discord.Member,
         await interaction.edit_original_response(content="❌ Protection Block: Founders and co founders cannot be real-striked by staff. Only the Server Owner can execute this.")
         return
 
+    if interaction.user.top_role <= member.top_role and interaction.guild.owner_id != interaction.user.id:
