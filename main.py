@@ -106,16 +106,20 @@ def is_high_rank(member: discord.Member) -> bool:
     return False
 
 def clean_tiktok_url(url: str) -> str:
-    """Converts standard TikTok URLs to tnktok proxy formatting to fix mobile players and quiet audio issues."""
+    """Converts standard TikTok URLs to tikwm proxy formatting to fix mobile players and quiet audio issues."""
     clean_url = url.strip()
-    # Strips out any traces of the old broken vxtiktok link
+    
+    # Clean out any old broken link variations first
     if "vxtiktok.com" in clean_url:
         clean_url = clean_url.replace("vxtiktok.com", "tiktok.com")
-        
     if "tnktok.com" in clean_url:
+        clean_url = clean_url.replace("tnktok.com", "tiktok.com")
+        
+    # Route straight to active proxy player
+    if "tikwm.com" in clean_url:
         return clean_url
     if "tiktok.com" in clean_url:
-        return clean_url.replace("tiktok.com", "tnktok.com")
+        return clean_url.replace("tiktok.com", "tikwm.com")
     return clean_url
 
 def get_strike_message(member: discord.Member, number: int) -> str:
@@ -196,7 +200,6 @@ async def add_morning_video(interaction: discord.Interaction, url: str):
         await interaction.edit_original_response(content="❌ Error: Please provide a valid TikTok URL link.")
         return
         
-    # Auto-converts to the new active proxy format
     queued_morning_video = clean_tiktok_url(url)
     await interaction.edit_original_response(content=f"🔊 Video URL Processed! Audio booster proxy active. Target link: {queued_morning_video}")
 
@@ -217,105 +220,3 @@ async def issue_strike(interaction: discord.Interaction, member: discord.Member,
         return
 
     if is_high_rank(member) and interaction.guild.owner_id != interaction.user.id:
-        await interaction.edit_original_response(content="❌ Protection Block: Founders and co founders cannot be real-striked by staff. Only the Server Owner can execute this.")
-        return
-
-    if interaction.user.top_role <= member.top_role and interaction.guild.owner_id != interaction.user.id:
-        await interaction.edit_original_response(content="❌ Hierarchy Block: You cannot issue a strike to someone with a higher or equal role ranking.")
-        return
-
-    strike_channel = bot.get_channel(STRIKE_CHANNEL_ID)
-    if not strike_channel:
-        await interaction.edit_original_response(content="❌ Configuration Error: Could not locate the dedicated strike log channel.")
-        return
-
-    msg = get_strike_message(member, number)
-
-    try:
-        if number == 1:
-            await strike_channel.send(msg)
-        elif number == 2:
-            await member.timeout(datetime.timedelta(minutes=30), reason="Strike 2")
-            await strike_channel.send(msg)
-        elif number == 3:
-            await member.timeout(datetime.timedelta(hours=1, minutes=30), reason="Strike 3")
-            await strike_channel.send(msg)
-        elif number == 4:
-            await member.timeout(datetime.timedelta(days=3), reason="Strike 4")
-            await strike_channel.send(msg)
-        elif number == 5:
-            await member.ban(reason="Strike 5: Accumulation Limit Reached", delete_message_days=1)
-            await strike_channel.send(msg)
-
-        await interaction.edit_original_response(content=f"✅ Real Strike {number} processed seamlessly in {strike_channel.mention}.")
-
-    except discord.Forbidden:
-        await interaction.edit_original_response(content="❌ Bot Permission Failure: Ensure the bot role is dragged above the target user in Server Settings.")
-    except Exception as e:
-        await interaction.edit_original_response(content=f"❌ Execution Failure: {e}")
-
-@bot.tree.command(name="teststrike", description="Simulate a fake strike warning message that drops in channel but does not punish.")
-@app_commands.describe(member="The user to simulate onto", number="The strike level to fake (1 to 5)")
-@app_commands.choices(number=[
-    app_commands.Choice(name="Fake Strike 1: Warning", value=1),
-    app_commands.Choice(name="Fake Strike 2: 30 Min Timeout", value=2),
-    app_commands.Choice(name="Fake Strike 3: 1.5 Hour Timeout", value=3),
-    app_commands.Choice(name="Fake Strike 4: 3 Day Timeout", value=4),
-    app_commands.Choice(name="Fake Strike 5: Permanent Ban", value=5)
-])
-async def test_strike(interaction: discord.Interaction, member: discord.Member, number: int):
-    await interaction.response.send_message("🔄 Running test simulation...", ephemeral=True)
-
-    if not is_authorized_staff(interaction.user):
-        await interaction.edit_original_response(content="❌ Access Denied: You must be a Founder, co founder, or Admin to execute simulation scripts.")
-        return
-
-    strike_channel = bot.get_channel(STRIKE_CHANNEL_ID)
-    if not strike_channel:
-        await interaction.edit_original_response(content="❌ Configuration Error: Could not locate the dedicated strike log channel.")
-        return
-
-    base_msg = get_strike_message(member, number)
-    fake_msg = f"{base_msg} (TEST BY {interaction.user.mention})"
-    
-    await strike_channel.send(fake_msg)
-    await interaction.edit_original_response(content=f"👻 Simulation Verified: Fake Test Strike {number} dropped safely in {strike_channel.mention}.")
-
-# --- SCHEDULER ENGINE ---
-
-@tasks.loop(minutes=1)
-async def scheduler_loop():
-    global queued_morning_video
-    await bot.wait_until_ready()
-    
-    tz = pytz.timezone('Europe/London')
-    now = datetime.datetime.now(tz)
-    
-    current_time = now.strftime("%H:%M")
-    day_of_week = now.weekday() 
-    day_type = 'weekend' if day_of_week >= 5 else 'weekday'
-    
-    for alert_type, alert_time, storage_key in SCHEDULE_KEYS:
-        if alert_type == day_type and alert_time == current_time:
-            channel = bot.get_channel(ALERT_CHANNEL_ID)
-            if channel:
-                current_active_text = SCHEDULE_DATA[storage_key]
-                is_morning = (alert_time == "08:00" and day_type == 'weekday') or (alert_time == "10:00" and day_type == 'weekend')
-                
-                if is_morning:
-                    if queued_morning_video is not None:
-                        selected_video = queued_morning_video
-                        queued_morning_video = None
-                    else:
-                        selected_video = clean_tiktok_url(random.choice(TIKTOK_BANK))
-                    
-                    full_message = f"{current_active_text}\n{selected_video}"
-                else:
-                    full_message = current_active_text
-                
-                await channel.send(full_message)
-                break
-
-# Run web routing and discord gateway concurrently
-threading.Thread(target=run_web_server).start()
-bot.run(TOKEN)
