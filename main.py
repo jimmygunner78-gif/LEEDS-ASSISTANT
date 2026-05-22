@@ -47,20 +47,23 @@ SCHEDULE = [
     ('weekend', "22:00", "# @everyone FINAL REMINDER")
 ]
 
-# --- THE FIX: FULL GATEWAY INTENTS PROFILE LOADING ---
-intents = discord.Intents.all()
-bot = commands.Bot(command_prefix="!", intents=intents)
+# --- THE CORRECTION: CUSTOM BOT CLIENT CLASS ---
+class LeedsBot(commands.Bot):
+    def __init__(self):
+        intents = discord.Intents.all()
+        super().__init__(command_prefix="!", intents=intents)
+
+    async def setup_hook(self):
+        """Syncs the slash commands properly before the gateway log-in."""
+        guild_target = discord.Object(id=GUILD_ID)
+        self.tree.copy_global_to(guild=guild_target)
+        await self.tree.sync(guild=guild_target)
+
+bot = LeedsBot()
 
 @bot.event
 async def on_ready():
     print(f"Logged in as {bot.user.name}")
-    try:
-        guild_target = discord.Object(id=GUILD_ID)
-        bot.tree.copy_global_to(guild=guild_target)
-        await bot.tree.sync(guild=guild_target)
-    except Exception as e:
-        print(f"Sync error: {e}")
-        
     if not scheduler_loop.is_running():
         scheduler_loop.start()
 
@@ -189,7 +192,6 @@ async def issue_strike(interaction: discord.Interaction, member: discord.Member,
 
         await interaction.response.send_message(f"✅ Real Strike {number} sent to {strike_channel.mention}.", ephemeral=True)
     except Exception as e:
-        await interaction.guild.get_member(member.id)  # Fallback data check
         await interaction.response.send_message(f"❌ Error: {e}", ephemeral=True)
 
 @bot.tree.command(name="teststrike", description="Simulate a fake strike warning message that drops in channel but does not punish.")
@@ -240,4 +242,3 @@ async def scheduler_loop():
                     if queued_morning_video is not None:
                         selected_video = queued_morning_video
                         queued_morning_video = None
-                    else:
