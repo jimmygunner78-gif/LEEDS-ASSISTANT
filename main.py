@@ -19,7 +19,7 @@ def run_web_server():
     port = int(os.environ.get("PORT", 8080))
     app.run(host='0.0.0.0', port=port)
 
-# --- CONFIGURATION ---
+# --- BOT CONFIGURATION VARIABLES ---
 TOKEN = os.environ.get('DISCORD_TOKEN')
 ALERT_CHANNEL_ID = 1505124887189000214  
 STRIKE_CHANNEL_ID = 1505179437585666169  
@@ -47,19 +47,19 @@ SCHEDULE = [
     ('weekend', "22:00", "# @everyone FINAL REMINDER")
 ]
 
-# --- THE CORRECTION: CUSTOM BOT CLIENT CLASS ---
-class LeedsBot(commands.Bot):
+# --- REPAIRED STRUCTURAL CLASS ---
+class LeedsAssistant(commands.Bot):
     def __init__(self):
         intents = discord.Intents.all()
         super().__init__(command_prefix="!", intents=intents)
 
     async def setup_hook(self):
-        """Syncs the slash commands properly before the gateway log-in."""
+        """Executes full slash synchronization natively inside the startup runtime."""
         guild_target = discord.Object(id=GUILD_ID)
         self.tree.copy_global_to(guild=guild_target)
         await self.tree.sync(guild=guild_target)
 
-bot = LeedsBot()
+bot = LeedsAssistant()
 
 @bot.event
 async def on_ready():
@@ -67,7 +67,7 @@ async def on_ready():
     if not scheduler_loop.is_running():
         scheduler_loop.start()
 
-# --- STAFF SECURITY LOGIC ---
+# --- SECURITY UTILITIES ---
 def is_authorized_staff(member: discord.Member) -> bool:
     if member.guild.owner_id == member.id:
         return True
@@ -107,7 +107,7 @@ def get_strike_message(member: discord.Member, number: int) -> str:
         return f"{member.mention} YOU BROKE THE RULES TO MANY TIMES YOU ARE BANNED"
     return ""
 
-# --- SLASH COMMANDS ---
+# --- APPLICATION COMMAND MAPS ---
 
 @bot.tree.command(name="schedule", description="Displays the automated messaging timetable.")
 async def show_schedule(interaction: discord.Interaction):
@@ -219,7 +219,7 @@ async def test_strike(interaction: discord.Interaction, member: discord.Member, 
     await strike_channel.send(fake_msg)
     await interaction.response.send_message(f"👻 Test Strike dropped in {strike_channel.mention}.", ephemeral=True)
 
-# --- CLOCK ENGINE ---
+# --- TRACKING TASK ENGINE ---
 @tasks.loop(minutes=1)
 async def scheduler_loop():
     global queued_morning_video
