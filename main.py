@@ -20,7 +20,6 @@ def run_web_server():
     app.run(host='0.0.0.0', port=port)
 
 # --- BOT CONFIGURATION ---
-TOKEN = os.environ.get('DISCORD_TOKEN')
 ALERT_CHANNEL_ID = 1505124887189000214  # Channel for your daily TikTok reminders
 STRIKE_CHANNEL_ID = 1505179437585666169  # Your verified text strike channel ID
 GUILD_ID = 1505104807382220870         # Your exact Discord Server ID
