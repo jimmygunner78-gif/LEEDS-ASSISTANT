@@ -8,7 +8,7 @@ from flask import Flask
 import threading
 import os
 
-# --- BASIC WEB CONTAINER FOR RENDER ---
+# --- WEB SERVER ENGINE ---
 app = Flask('')
 
 @app.route('/')
@@ -19,13 +19,12 @@ def run_web_server():
     port = int(os.environ.get("PORT", 8080))
     app.run(host='0.0.0.0', port=port)
 
-# --- CONFIGURATION SETTINGS ---
+# --- CONFIGURATION ---
 TOKEN = os.environ.get('DISCORD_TOKEN')
-ALERT_CHANNEL_ID = 1505124887189000214  # Channel for your daily TikTok reminders
-STRIKE_CHANNEL_ID = 1505179437585666169  # Your verified text strike channel ID
-GUILD_ID = 1505104807382220870         # Your exact Discord Server ID
+ALERT_CHANNEL_ID = 1505124887189000214  
+STRIKE_CHANNEL_ID = 1505179437585666169  
+GUILD_ID = 1505104807382220870         
 
-# Permanent TikTok Database
 TIKTOK_BANK = [
     "https://tiktok.com",
     "https://tiktok.com"
@@ -33,7 +32,6 @@ TIKTOK_BANK = [
 
 queued_morning_video = None
 
-# Restored to your original simple list blueprint formatting
 SCHEDULE = [
     ('weekday', "08:00", "# @everyone ACTIVITY CHECK"),
     ('weekday', "16:00", "# @everyone REMINDER"),
@@ -49,15 +47,14 @@ SCHEDULE = [
     ('weekend', "22:00", "# @everyone FINAL REMINDER")
 ]
 
-intents = discord.Intents.default()
-intents.members = True
+# --- THE FIX: FULL GATEWAY INTENTS PROFILE LOADING ---
+intents = discord.Intents.all()
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 @bot.event
 async def on_ready():
     print(f"Logged in as {bot.user.name}")
     try:
-        # Forces an instant command sync right to your server on boot
         guild_target = discord.Object(id=GUILD_ID)
         bot.tree.copy_global_to(guild=guild_target)
         await bot.tree.sync(guild=guild_target)
@@ -67,7 +64,7 @@ async def on_ready():
     if not scheduler_loop.is_running():
         scheduler_loop.start()
 
-# --- SECURITY CHECKS ---
+# --- STAFF SECURITY LOGIC ---
 def is_authorized_staff(member: discord.Member) -> bool:
     if member.guild.owner_id == member.id:
         return True
@@ -87,7 +84,6 @@ def is_high_rank(member: discord.Member) -> bool:
     return False
 
 def clean_tiktok_url(url: str) -> str:
-    """Converts regular TikTok links to mobile-friendly audio boosted players."""
     clean_url = url.strip()
     if "tikwm.com" in clean_url:
         return clean_url
@@ -108,7 +104,7 @@ def get_strike_message(member: discord.Member, number: int) -> str:
         return f"{member.mention} YOU BROKE THE RULES TO MANY TIMES YOU ARE BANNED"
     return ""
 
-# --- COMMANDS ---
+# --- SLASH COMMANDS ---
 
 @bot.tree.command(name="schedule", description="Displays the automated messaging timetable.")
 async def show_schedule(interaction: discord.Interaction):
@@ -193,6 +189,7 @@ async def issue_strike(interaction: discord.Interaction, member: discord.Member,
 
         await interaction.response.send_message(f"✅ Real Strike {number} sent to {strike_channel.mention}.", ephemeral=True)
     except Exception as e:
+        await interaction.guild.get_member(member.id)  # Fallback data check
         await interaction.response.send_message(f"❌ Error: {e}", ephemeral=True)
 
 @bot.tree.command(name="teststrike", description="Simulate a fake strike warning message that drops in channel but does not punish.")
@@ -240,3 +237,7 @@ async def scheduler_loop():
                 is_morning = (alert_time == "08:00" and day_type == 'weekday') or (alert_time == "10:00" and day_type == 'weekend')
                 
                 if is_morning:
+                    if queued_morning_video is not None:
+                        selected_video = queued_morning_video
+                        queued_morning_video = None
+                    else:
