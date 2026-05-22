@@ -20,6 +20,7 @@ def run_web_server():
     app.run(host='0.0.0.0', port=port)
 
 # --- BOT CONFIGURATION ---
+TOKEN = os.environ.get('DISCORD_TOKEN')
 ALERT_CHANNEL_ID = 1505124887189000214  # Channel for your daily TikTok reminders
 STRIKE_CHANNEL_ID = 1505179437585666169  # Your verified text strike channel ID
 GUILD_ID = 1505104807382220870         # Your exact Discord Server ID
@@ -47,22 +48,6 @@ SCHEDULE_DATA = {
     'weekend_20:00': "# @everyone REMINDER",
     'weekend_22:00': "# @everyone FINAL REMINDER"
 }
-
-# Ordered structural schedule blueprint
-SCHEDULE_KEYS = [
-    ('weekday', "08:00", 'weekday_08:00'),
-    ('weekday', "16:00", 'weekday_16:00'),
-    ('weekday', "18:00", 'weekday_18:00'),
-    ('weekday', "20:00", 'weekday_20:00'),
-    ('weekday', "22:00", 'weekday_22:00'),
-    ('weekend', "10:00", 'weekend_10:00'),
-    ('weekend', "12:00", 'weekend_12:00'),
-    ('weekend', "13:00", 'weekend_13:00'),
-    ('weekend', "15:00", 'weekend_15:00'),
-    ('weekend', "17:00", 'weekend_17:00'),
-    ('weekend', "20:00", 'weekend_20:00'),
-    ('weekend', "22:00", 'weekend_22:00')
-]
 
 # --- INSTANT SYNC ENGINE ---
 class LeedsBotClient(commands.Bot):
@@ -107,7 +92,6 @@ def is_high_rank(member: discord.Member) -> bool:
 def clean_tiktok_url(url: str) -> str:
     """Converts standard TikTok URLs to tikwm proxy formatting to fix mobile players and quiet audio issues."""
     clean_url = url.strip()
-    
     if "vxtiktok.com" in clean_url:
         clean_url = clean_url.replace("vxtiktok.com", "tiktok.com")
     if "tnktok.com" in clean_url:
@@ -221,3 +205,16 @@ async def issue_strike(interaction: discord.Interaction, member: discord.Member,
         await interaction.edit_original_response(content="❌ Protection Block: Founders and co founders cannot be real-striked by staff. Only the Server Owner can execute this.")
         return
 
+    if interaction.user.top_role <= member.top_role and interaction.guild.owner_id != interaction.user.id:
+        await interaction.edit_original_response(content="❌ Hierarchy Block: You cannot issue a strike to someone with a higher or equal role ranking.")
+        return
+
+    strike_channel = bot.get_channel(STRIKE_CHANNEL_ID)
+    if not strike_channel:
+        await interaction.edit_original_response(content="❌ Configuration Error: Could not locate the dedicated strike log channel.")
+        return
+
+    msg = get_strike_message(member, number)
+
+    try:
+        if number == 1:
