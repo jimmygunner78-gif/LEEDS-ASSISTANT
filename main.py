@@ -33,22 +33,24 @@ TIKTOK_BANK = [
 
 queued_morning_video = None
 
-# --- ORIGINAL BOT SETUP WITH ALL INTENTS ---
-intents = discord.Intents.all()
-bot = commands.Bot(command_prefix="!", intents=intents)
+# --- FOOLPROOF BOT SETUP CLASS ---
+class LeedsBot(commands.Bot):
+    def __init__(self):
+        intents = discord.Intents.all()
+        super().__init__(command_prefix="!", intents=intents)
+
+    async def setup_hook(self):
+        """Forces an instant command sync before gateway login to prevent timeouts."""
+        guild_target = discord.Object(id=GUILD_ID)
+        self.tree.copy_global_to(guild=guild_target)
+        await self.tree.sync(guild=guild_target)
+        print("Slash commands hard-synced successfully!")
+
+bot = LeedsBot()
 
 @bot.event
 async def on_ready():
     print(f"Logged in as {bot.user.name}")
-    try:
-        # Instantly registers slash commands to your server on boot
-        guild_target = discord.Object(id=GUILD_ID)
-        bot.tree.copy_global_to(guild=guild_target)
-        await bot.tree.sync(guild=guild_target)
-        print("Slash commands synced successfully!")
-    except Exception as e:
-        print(f"Sync error: {e}")
-        
     if not scheduler_loop.is_running():
         scheduler_loop.start()
 
@@ -237,5 +239,4 @@ async def scheduler_loop():
             channel = bot.get_channel(ALERT_CHANNEL_ID)
             if channel:
                 is_morning = (alert_time == "08:00" and day_type == 'weekday') or (alert_time == "10:00" and day_type == 'weekend')
-                
-                if is_morning:
+
