@@ -69,12 +69,10 @@ class LeedsBotClient(commands.Bot):
 
     async def setup_hook(self):
         """Forces an instant server sync and boots up the background web server safely."""
-        # This registers your slash commands instantly to your server
         guild_target = discord.Object(id=GUILD_ID)
         self.tree.copy_global_to(guild=guild_target)
         await self.tree.sync(guild=guild_target)
         
-        # This boots up the web server inside Discord's event runner to prevent early exit
         from werkzeug.serving import make_server
         port = int(os.environ.get("PORT", 8080))
         srv = make_server('0.0.0.0', port, app)
@@ -220,3 +218,6 @@ async def issue_strike(interaction: discord.Interaction, member: discord.Member,
         return
 
     if is_high_rank(member) and interaction.guild.owner_id != interaction.user.id:
+        await interaction.edit_original_response(content="❌ Protection Block: Founders and co founders cannot be real-striked by staff. Only the Server Owner can execute this.")
+        return
+
