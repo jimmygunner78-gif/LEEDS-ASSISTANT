@@ -5,19 +5,15 @@ import datetime
 import pytz
 import random
 from flask import Flask
-import threading
+import asyncio
 import os
 
-# --- WEB SERVER ENGINE FOR RENDER & UPTIMEROBOT ---
+# --- WEB SERVER CONFIGURATION ---
 app = Flask('')
 
 @app.route('/')
 def home():
     return "Leeds Assistant Bot is fully operational!"
-
-def run_web_server():
-    port = int(os.environ.get("PORT", 8080))
-    app.run(host='0.0.0.0', port=port)
 
 # --- BOT CONFIGURATION ---
 TOKEN = os.environ.get('DISCORD_TOKEN')
@@ -49,18 +45,41 @@ SCHEDULE_DATA = {
     'weekend_22:00': "# @everyone FINAL REMINDER"
 }
 
-# --- INSTANT SYNC ENGINE ---
+# Ordered structural schedule blueprint
+SCHEDULE_KEYS = [
+    ('weekday', "08:00", 'weekday_08:00'),
+    ('weekday', "16:00", 'weekday_16:00'),
+    ('weekday', "18:00", 'weekday_18:00'),
+    ('weekday', "20:00", 'weekday_20:00'),
+    ('weekday', "22:00", 'weekday_22:00'),
+    ('weekend', "10:00", 'weekend_10:00'),
+    ('weekend', "12:00", 'weekend_12:00'),
+    ('weekend', "13:00", 'weekend_13:00'),
+    ('weekend', "15:00", 'weekend_15:00'),
+    ('weekend', "17:00", 'weekend_17:00'),
+    ('weekend', "20:00", 'weekend_20:00'),
+    ('weekend', "22:00", 'weekend_22:00')
+]
+
+# --- INSTANT SYNC CLIENT ---
 class LeedsBotClient(commands.Bot):
     def __init__(self):
         intents = discord.Intents.all()
         super().__init__(command_prefix="!", intents=intents)
 
     async def setup_hook(self):
-        """Forces an instant server sync before the bot fully connects."""
+        """Forces an instant server sync and boots up the background web server safely."""
+        # This registers your slash commands instantly to your server
         guild_target = discord.Object(id=GUILD_ID)
         self.tree.copy_global_to(guild=guild_target)
-        synced_list = await self.tree.sync(guild=guild_target)
-        print(f"Successfully synced {len(synced_list)} slash command(s) instantly.")
+        await self.tree.sync(guild=guild_target)
+        
+        # This boots up the web server inside Discord's event runner to prevent early exit
+        from werkzeug.serving import make_server
+        port = int(os.environ.get("PORT", 8080))
+        srv = make_server('0.0.0.0', port, app)
+        loop = asyncio.get_running_loop()
+        loop.run_in_executor(None, srv.serve_forever)
 
 bot = LeedsBotClient()
 
@@ -90,7 +109,6 @@ def is_high_rank(member: discord.Member) -> bool:
     return False
 
 def clean_tiktok_url(url: str) -> str:
-    """Converts standard TikTok URLs to tikwm proxy formatting to fix mobile players and quiet audio issues."""
     clean_url = url.strip()
     if "vxtiktok.com" in clean_url:
         clean_url = clean_url.replace("vxtiktok.com", "tiktok.com")
@@ -202,19 +220,3 @@ async def issue_strike(interaction: discord.Interaction, member: discord.Member,
         return
 
     if is_high_rank(member) and interaction.guild.owner_id != interaction.user.id:
-        await interaction.edit_original_response(content="❌ Protection Block: Founders and co founders cannot be real-striked by staff. Only the Server Owner can execute this.")
-        return
-
-    if interaction.user.top_role <= member.top_role and interaction.guild.owner_id != interaction.user.id:
-        await interaction.edit_original_response(content="❌ Hierarchy Block: You cannot issue a strike to someone with a higher or equal role ranking.")
-        return
-
-    strike_channel = bot.get_channel(STRIKE_CHANNEL_ID)
-    if not strike_channel:
-        await interaction.edit_original_response(content="❌ Configuration Error: Could not locate the dedicated strike log channel.")
-        return
-
-    msg = get_strike_message(member, number)
-
-    try:
-        if number == 1:
