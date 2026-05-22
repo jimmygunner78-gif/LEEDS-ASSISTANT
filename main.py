@@ -109,13 +109,11 @@ def clean_tiktok_url(url: str) -> str:
     """Converts standard TikTok URLs to tikwm proxy formatting to fix mobile players and quiet audio issues."""
     clean_url = url.strip()
     
-    # Clean out any old broken link variations first
     if "vxtiktok.com" in clean_url:
         clean_url = clean_url.replace("vxtiktok.com", "tiktok.com")
     if "tnktok.com" in clean_url:
         clean_url = clean_url.replace("tnktok.com", "tiktok.com")
         
-    # Route straight to active proxy player
     if "tikwm.com" in clean_url:
         return clean_url
     if "tiktok.com" in clean_url:
@@ -200,6 +198,7 @@ async def add_morning_video(interaction: discord.Interaction, url: str):
         await interaction.edit_original_response(content="❌ Error: Please provide a valid TikTok URL link.")
         return
         
+    global queued_morning_video
     queued_morning_video = clean_tiktok_url(url)
     await interaction.edit_original_response(content=f"🔊 Video URL Processed! Audio booster proxy active. Target link: {queued_morning_video}")
 
@@ -220,3 +219,6 @@ async def issue_strike(interaction: discord.Interaction, member: discord.Member,
         return
 
     if is_high_rank(member) and interaction.guild.owner_id != interaction.user.id:
+        await interaction.edit_original_response(content="❌ Protection Block: Founders and co founders cannot be real-striked by staff. Only the Server Owner can execute this.")
+        return
+
