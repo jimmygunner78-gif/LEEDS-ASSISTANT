@@ -4,11 +4,13 @@ from discord.ext import tasks, commands
 import datetime
 import pytz
 import random
-from flask import Flask
-import asyncio
 import os
+import asyncio
+from hypercorn.config import Config
+from hypercorn.asyncio import serve
 
-# --- STANDALONE WEB ENGINE ---
+# --- STANDALONE WEB PATHS FOR RENDER ---
+from flask import Flask
 app = Flask('')
 
 @app.route('/')
@@ -51,18 +53,11 @@ class LeedsBot(commands.Bot):
         super().__init__(command_prefix="!", intents=intents)
 
     async def setup_hook(self):
-        """Forces an instant command sync right to your server on boot and runs the webserver on the async loop."""
+        """Forces an instant command sync right to your server on boot."""
         guild_target = discord.Object(id=GUILD_ID)
         self.tree.copy_global_to(guild=guild_target)
         await self.tree.sync(guild=guild_target)
         print("Slash commands synced successfully!")
-        
-        # Fixed async port listener setup to stop the Render early exit crash loops
-        from werkzeug.serving import make_server
-        port = int(os.environ.get("PORT", 8080))
-        srv = make_server('0.0.0.0', port, app)
-        loop = asyncio.get_running_loop()
-        loop.run_in_executor(None, srv.serve_forever)
 
 bot = LeedsBot()
 
@@ -239,3 +234,8 @@ async def scheduler_loop():
     
     for alert_type, alert_time, alert_msg in SCHEDULE:
         if alert_type == day_type and alert_time == current_time:
+            channel = bot.get_channel(ALERT_CHANNEL_ID)
+            if channel:
+                is_morning_slot = (alert_time == "08:00" and day_type == 'weekday') or (alert_time == "10:00" and day_type == 'weekend')
+                
+                if is_morning_slot:
