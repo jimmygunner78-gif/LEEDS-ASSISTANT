@@ -5,7 +5,7 @@ import datetime
 import pytz
 import random
 from flask import Flask
-import threading
+import asyncio
 import os
 
 # --- STANDALONE WEB ENGINE ---
@@ -14,11 +14,6 @@ app = Flask('')
 @app.route('/')
 def home():
     return "Leeds Assistant Bot is fully operational!"
-
-def run_web_server():
-    # Dynamically pulls Render's assigned network routing port cleanly
-    port = int(os.environ.get("PORT", 8080))
-    app.run(host='0.0.0.0', port=port)
 
 # --- BOT CONFIGURATION CONFIGS ---
 TOKEN = os.environ.get('DISCORD_TOKEN')
@@ -34,6 +29,21 @@ TIKTOK_BANK = [
 
 queued_morning_video = None
 
+SCHEDULE = [
+    ('weekday', "08:00", "# @everyone ACTIVITY CHECK"),
+    ('weekday', "16:00", "# @everyone REMINDER"),
+    ('weekday', "18:00", "# @everyone REMINDER"),
+    ('weekday', "20:00", "# @everyone REMINDER"),
+    ('weekday', "22:00", "# @everyone FINAL REMINDER"),
+    ('weekend', "10:00", "# @everyone ACTIVITY CHECK"),
+    ('weekend', "12:00", "# @everyone REMINDER"),
+    ('weekend', "13:00", "# @everyone REMINDER"),
+    ('weekend', "15:00", "# @everyone REMINDER"),
+    ('weekend', "17:00", "# @everyone REMINDER"),
+    ('weekend', "20:00", "# @everyone REMINDER"),
+    ('weekend', "22:00", "# @everyone FINAL REMINDER")
+]
+
 # --- INSTANT SYNC LOGIC ENGINE ---
 class LeedsBot(commands.Bot):
     def __init__(self):
@@ -41,11 +51,18 @@ class LeedsBot(commands.Bot):
         super().__init__(command_prefix="!", intents=intents)
 
     async def setup_hook(self):
-        """Forces an instant command sync right to your server on boot to prevent gateway lag."""
+        """Forces an instant command sync right to your server on boot and runs the webserver on the async loop."""
         guild_target = discord.Object(id=GUILD_ID)
         self.tree.copy_global_to(guild=guild_target)
         await self.tree.sync(guild=guild_target)
         print("Slash commands synced successfully!")
+        
+        # Fixed async port listener setup to stop the Render early exit crash loops
+        from werkzeug.serving import make_server
+        port = int(os.environ.get("PORT", 8080))
+        srv = make_server('0.0.0.0', port, app)
+        loop = asyncio.get_running_loop()
+        loop.run_in_executor(None, srv.serve_forever)
 
 bot = LeedsBot()
 
@@ -207,7 +224,7 @@ async def test_strike(interaction: discord.Interaction, member: discord.Member, 
     await strike_channel.send(fake_msg)
     await interaction.response.send_message(f"👻 Test Strike dropped in {strike_channel.mention}.", ephemeral=True)
 
-# --- TRACKING TIMER TASK ---
+# --- CLOCK ENGINE ---
 @tasks.loop(minutes=1)
 async def scheduler_loop():
     global queued_morning_video
@@ -220,22 +237,5 @@ async def scheduler_loop():
     day_of_week = now.weekday() 
     day_type = 'weekend' if day_of_week >= 5 else 'weekday'
     
-    SCHEDULE = [
-        ('weekday', "08:00", "# @everyone ACTIVITY CHECK"),
-        ('weekday', "16:00", "# @everyone REMINDER"),
-        ('weekday', "18:00", "# @everyone REMINDER"),
-        ('weekday', "20:00", "# @everyone REMINDER"),
-        ('weekday', "22:00", "# @everyone FINAL REMINDER"),
-        ('weekend', "10:00", "# @everyone ACTIVITY CHECK"),
-        ('weekend', "12:00", "# @everyone REMINDER"),
-        ('weekend', "13:00", "# @everyone REMINDER"),
-        ('weekend', "15:00", "# @everyone REMINDER"),
-        ('weekend', "17:00", "# @everyone REMINDER"),
-        ('weekend', "20:00", "# @everyone REMINDER"),
-        ('weekend', "22:00", "# @everyone FINAL REMINDER")
-    ]
-    
     for alert_type, alert_time, alert_msg in SCHEDULE:
         if alert_type == day_type and alert_time == current_time:
-            channel = bot.get_channel(ALERT_CHANNEL_ID)
-            if channel:
