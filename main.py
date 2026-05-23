@@ -5,25 +5,19 @@ import datetime
 import pytz
 import random
 import os
-import asyncio
-from hypercorn.config import Config
-from hypercorn.asyncio import serve
+from aiohttp import web
 
-# --- STANDALONE WEB PATHS FOR RENDER ---
-from flask import Flask
-app = Flask('')
+# --- MINIMALIST EMBEDDED ASYNC SERVER ROUTING ---
+async def home_route(request):
+    return web.Response(text="Leeds Assistant Bot is fully operational!")
 
-@app.route('/')
-def home():
-    return "Leeds Assistant Bot is fully operational!"
-
-# --- BOT CONFIGURATION CONFIGS ---
+# --- BOT INTERFACE CONFIGURATIONS ---
 TOKEN = os.environ.get('DISCORD_TOKEN')
 ALERT_CHANNEL_ID = 1505124887189000214  # Daily reminders channel
 STRIKE_CHANNEL_ID = 1505179437585666169  # Strike log channel
 GUILD_ID = 1505104807382220870         # Server ID
 
-# Your permanent database of TikTok links (Auto-boosted for mobile & PC volume)
+# Permanent TikTok Database Pool
 TIKTOK_BANK = [
     "https://tikwm.com",
     "https://tikwm.com"
@@ -46,18 +40,30 @@ SCHEDULE = [
     ('weekend', "22:00", "# @everyone FINAL REMINDER")
 ]
 
-# --- INSTANT SYNC LOGIC ENGINE ---
+# --- UNIFIED BOT AND SLASH INTERACTION LOGIC ---
 class LeedsBot(commands.Bot):
     def __init__(self):
         intents = discord.Intents.all()
         super().__init__(command_prefix="!", intents=intents)
 
     async def setup_hook(self):
-        """Forces an instant command sync right to your server on boot."""
+        """Launches the embedded web app server inside the bot's engine loop."""
+        # 1. Hard-syncs your slash commands instantly right to your server
         guild_target = discord.Object(id=GUILD_ID)
         self.tree.copy_global_to(guild=guild_target)
         await self.tree.sync(guild=guild_target)
         print("Slash commands synced successfully!")
+
+        # 2. Starts the async web server on the correct port to clear Render's error check
+        server_app = web.Application()
+        server_app.router.add_get('/', home_route)
+        server_runner = web.AppRunner(server_app)
+        await server_runner.setup()
+        
+        assigned_port = int(os.environ.get("PORT", 8080))
+        server_site = web.TCPSite(server_runner, '0.0.0.0', assigned_port)
+        await server_site.start()
+        print(f"Async port listener bound cleanly on port {assigned_port}")
 
 bot = LeedsBot()
 
@@ -67,7 +73,7 @@ async def on_ready():
     if not scheduler_loop.is_running():
         scheduler_loop.start()
 
-# --- STAFF SECURITY RULES ---
+# --- ADMIN PERMISSION MATRIX ---
 def is_authorized_staff(member: discord.Member) -> bool:
     if member.guild.owner_id == member.id:
         return True
@@ -107,7 +113,7 @@ def get_strike_message(member: discord.Member, number: int) -> str:
         return f"{member.mention} YOU BROKE THE RULES TO MANY TIMES YOU ARE BANNED"
     return ""
 
-# --- APPLICATION COMMAND MAPS ---
+# --- APPLICATION SLASH COMMAND MAPS ---
 
 @bot.tree.command(name="schedule", description="Displays the automated messaging timetable.")
 async def show_schedule(interaction: discord.Interaction):
@@ -219,7 +225,7 @@ async def test_strike(interaction: discord.Interaction, member: discord.Member, 
     await strike_channel.send(fake_msg)
     await interaction.response.send_message(f"👻 Test Strike dropped in {strike_channel.mention}.", ephemeral=True)
 
-# --- CLOCK ENGINE ---
+# --- TRACKING TIMER CLOCK TASK ENGINE ---
 @tasks.loop(minutes=1)
 async def scheduler_loop():
     global queued_morning_video
@@ -229,13 +235,3 @@ async def scheduler_loop():
     now = datetime.datetime.now(tz)
     
     current_time = now.strftime("%H:%M")
-    day_of_week = now.weekday() 
-    day_type = 'weekend' if day_of_week >= 5 else 'weekday'
-    
-    for alert_type, alert_time, alert_msg in SCHEDULE:
-        if alert_type == day_type and alert_time == current_time:
-            channel = bot.get_channel(ALERT_CHANNEL_ID)
-            if channel:
-                is_morning_slot = (alert_time == "08:00" and day_type == 'weekday') or (alert_time == "10:00" and day_type == 'weekend')
-                
-                if is_morning_slot:
